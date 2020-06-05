@@ -17,6 +17,8 @@
  */
 package org.ethereum.datasource;
 
+import java.util.Map;
+
 /**
  * Cache of Caches (child caches)
  * When a child cache is not found in the local cache it is looked up in the backing Source
@@ -91,4 +93,8 @@ public abstract class MultiCache<V extends CachedSource> extends ReadWriteCache.
      * (or null) from the MultiCache backing Source
      */
     protected abstract V create(byte[] key, V srcCache);
+
+    public synchronized Map<byte[] , byte[]> getSerializedCache() {
+    	return null;
+    }
 }

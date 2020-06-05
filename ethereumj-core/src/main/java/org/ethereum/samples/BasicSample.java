@@ -17,12 +17,6 @@
  */
 package org.ethereum.samples;
 
-import ch.qos.logback.classic.Level;
-import ch.qos.logback.classic.LoggerContext;
-import ch.qos.logback.classic.spi.ILoggingEvent;
-import ch.qos.logback.core.Appender;
-import ch.qos.logback.core.filter.Filter;
-import ch.qos.logback.core.spi.FilterReply;
 import org.ethereum.config.SystemProperties;
 import org.ethereum.core.*;
 import org.ethereum.facade.Ethereum;
@@ -59,7 +53,6 @@ import java.util.*;
 public class BasicSample implements Runnable {
 
     public static final Logger sLogger = LoggerFactory.getLogger("sample");
-    private static CustomFilter CUSTOM_FILTER;
 
     private String loggerName;
     protected Logger logger;
@@ -112,15 +105,6 @@ public class BasicSample implements Runnable {
      * Other loggers are allowed to print ERRORS only.
      */
     private static void addSampleLogger(final String loggerName) {
-        if (CUSTOM_FILTER == null) {
-            CUSTOM_FILTER = new CustomFilter();
-            final LoggerContext loggerContext = (LoggerContext) LoggerFactory.getILoggerFactory();
-
-            Appender ca = loggerContext.getLogger("ROOT").getAppender("STDOUT");
-            ca.clearAllFilters();
-            ca.addFilter(CUSTOM_FILTER);
-        }
-        CUSTOM_FILTER.addVisibleLogger(loggerName);
     }
 
     /**
@@ -381,17 +365,4 @@ public class BasicSample implements Runnable {
         public void onTransactionExecuted(TransactionExecutionSummary summary) {
         }
     };
-
-    private static class CustomFilter extends Filter<ILoggingEvent> {
-        private Set<String> visibleLoggers = new HashSet<>();
-        @Override
-        public synchronized FilterReply decide(ILoggingEvent event) {
-            return visibleLoggers.contains(event.getLoggerName()) && event.getLevel().isGreaterOrEqual(Level.INFO) ||
-                    event.getLevel().isGreaterOrEqual(Level.ERROR) ? FilterReply.NEUTRAL : FilterReply.DENY;
-        }
-
-        public synchronized void addVisibleLogger(String name) {
-            visibleLoggers.add(name);
-        }
-    }
 }

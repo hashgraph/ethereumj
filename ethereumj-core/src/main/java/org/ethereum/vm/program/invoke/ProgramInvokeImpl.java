@@ -287,6 +287,10 @@ public class ProgramInvokeImpl implements ProgramInvoke {
         return isStaticCall;
     }
 
+    public void setStaticCall(boolean isStaticCall) {
+        this.isStaticCall = isStaticCall;
+    }
+
     @Override
     public boolean byTestingSuite() {
         return byTestingSuite;

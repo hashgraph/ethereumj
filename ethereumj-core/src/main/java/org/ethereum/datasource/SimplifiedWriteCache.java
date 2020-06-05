@@ -1,20 +1,3 @@
-/*
- * Copyright (c) [2016] [ <ether.camp> ]
- * This file is part of the ethereumJ library.
- *
- * The ethereumJ library is free software: you can redistribute it and/or modify
- * it under the terms of the GNU Lesser General Public License as published by
- * the Free Software Foundation, either version 3 of the License, or
- * (at your option) any later version.
- *
- * The ethereumJ library is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
- * GNU Lesser General Public License for more details.
- *
- * You should have received a copy of the GNU Lesser General Public License
- * along with the ethereumJ library. If not, see <http://www.gnu.org/licenses/>.
- */
 package org.ethereum.datasource;
 
 import com.googlecode.concurentlocks.ReadWriteUpdateLock;
@@ -22,48 +5,16 @@ import com.googlecode.concurentlocks.ReentrantReadWriteUpdateLock;
 import org.ethereum.util.ALock;
 import org.ethereum.util.ByteArrayMap;
 
+import java.io.Serializable;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.Map;
 
-/**
- * Collects changes and propagate them to the backing Source when flush() is called
- *
- * The WriteCache can be of two types: Simple and Counting
- *
- * Simple acts as regular Map: single and double adding of the same entry has the same effect
- * Source entries (key/value pairs) may have arbitrary nature
- *
- * Counting counts the resulting number of inserts (+1) and deletes (-1) and when flushed
- * does the resulting number of inserts (if sum > 0) or deletes (if sum < 0)
- * Counting Source acts like {@link HashedKeySource} and makes sense only for data
- * where a single key always corresponds to a single value
- * Counting cache normally used as backing store for Trie data structure
- *
- * Created by Anton Nashatyrev on 11.11.2016.
- */
-public class WriteCache<Key, Value> extends AbstractCachedSource<Key, Value> {
 
-    /**
-     * Type of the write cache
-     */
-    public enum CacheType {
-        /**
-         * Simple acts as regular Map: single and double adding of the same entry has the same effect
-         * Source entries (key/value pairs) may have arbitrary nature
-         */
-        SIMPLE,
-        /**
-         * Counting counts the resulting number of inserts (+1) and deletes (-1) and when flushed
-         * does the resulting number of inserts (if sum > 0) or deletes (if sum < 0)
-         * Counting Source acts like {@link HashedKeySource} and makes sense only for data
-         * where a single key always corresponds to a single value
-         * Counting cache normally used as backing store for Trie data structure
-         */
-        COUNTING
-    }
+public class SimplifiedWriteCache<Key, Value> extends AbstractCachedSource<Key, Value> {
+  
 
-    public static abstract class CacheEntry<V> implements Entry<V>{
+    public static abstract class CacheEntry<V> implements Entry<V>,Serializable{
         // dedicated value instance which indicates that the entry was deleted
         // (ref counter decremented) but we don't know actual value behind it
         static final Object UNKNOWN_VALUE = new Object();
@@ -107,30 +58,6 @@ public class WriteCache<Key, Value> extends AbstractCachedSource<Key, Value> {
         }
     }
 
-    private static final class CountCacheEntry<V> extends CacheEntry<V> {
-        public CountCacheEntry(V value) {
-            super(value);
-        }
-
-        public void deleted() {
-            counter--;
-        }
-
-        public void added() {
-            counter++;
-        }
-
-        @Override
-        public V getValue() {
-            // for counting cache we return the cached value even if
-            // it was deleted (once or several times) as we don't know
-            // how many 'instances' are left behind
-            return value;
-        }
-    }
-
-    private final boolean isCounting;
-
     protected volatile Map<Key, CacheEntry<Value>> cache = new HashMap<>();
 
     protected ReadWriteUpdateLock rwuLock = new ReentrantReadWriteUpdateLock();
@@ -139,14 +66,12 @@ public class WriteCache<Key, Value> extends AbstractCachedSource<Key, Value> {
     protected ALock updateLock = new ALock(rwuLock.updateLock());
 
     private boolean checked = false;
-    private boolean modified = false;
 
-    public WriteCache(Source<Key, Value> src, CacheType cacheType) {
+    public SimplifiedWriteCache(Source<Key, Value> src) {
         super(src);
-        this.isCounting = cacheType == CacheType.COUNTING;
     }
 
-    public WriteCache<Key, Value> withCache(Map<Key, CacheEntry<Value>> cache) {
+    public SimplifiedWriteCache<Key, Value> withCache(Map<Key, CacheEntry<Value>> cache) {
         this.cache = cache;
         return this;
     }
@@ -160,27 +85,19 @@ public class WriteCache<Key, Value> extends AbstractCachedSource<Key, Value> {
 
     @Override
     public boolean hasModified() {
-        return modified;
+        return !cache.isEmpty();
     }
 
-    private CacheEntry<Value> createCacheEntry(Value val) {
-        if (isCounting) {
-            return new CountCacheEntry<>(val);
-        } else {
+    private CacheEntry<Value> createCacheEntry(Value val) {        
             return new SimpleCacheEntry<>(val);
-        }
     }
 
     @Override
     public void put(Key key, Value val) {
-        checkByteArrKey(key);
-        modified = true;
-
         if (val == null)  {
             delete(key);
             return;
         }
-
         try (ALock l = writeLock.lock()){
             CacheEntry<Value> curVal = cache.get(key);
             if (curVal == null) {
@@ -200,7 +117,6 @@ public class WriteCache<Key, Value> extends AbstractCachedSource<Key, Value> {
 
     @Override
     public Value get(Key key) {
-        checkByteArrKey(key);
         try (ALock l = readLock.lock()){
             CacheEntry<Value> curVal = cache.get(key);
             if (curVal == null) {
@@ -218,8 +134,6 @@ public class WriteCache<Key, Value> extends AbstractCachedSource<Key, Value> {
 
     @Override
     public void delete(Key key) {
-        checkByteArrKey(key);
-        modified = true;
         try (ALock l = writeLock.lock()){
             CacheEntry<Value> curVal = cache.get(key);
             if (curVal == null) {
@@ -238,19 +152,17 @@ public class WriteCache<Key, Value> extends AbstractCachedSource<Key, Value> {
     public boolean flush() {
         boolean ret = false;
         try (ALock l = updateLock.lock()){
-            if (modified) {
-                for (Map.Entry<Key, CacheEntry<Value>> entry : cache.entrySet()) {
-                    if (entry.getValue().counter > 0) {
-                        for (int i = 0; i < entry.getValue().counter; i++) {
-                            getSource().put(entry.getKey(), entry.getValue().value);
-                        }
-                        ret = true;
-                    } else if (entry.getValue().counter < 0) {
-                        for (int i = 0; i > entry.getValue().counter; i--) {
-                            getSource().delete(entry.getKey());
-                        }
-                        ret = true;
+            for (Map.Entry<Key, CacheEntry<Value>> entry : cache.entrySet()) {
+                if (entry.getValue().counter > 0) {
+                    for (int i = 0; i < entry.getValue().counter; i++) {
+                        getSource().put(entry.getKey(), entry.getValue().value);
                     }
+                    ret = true;
+                } else if (entry.getValue().counter < 0) {
+                    for (int i = 0; i > entry.getValue().counter; i--) {
+                        getSource().delete(entry.getKey());
+                    }
+                    ret = true;
                 }
             }
             if (flushSource) {
@@ -284,19 +196,6 @@ public class WriteCache<Key, Value> extends AbstractCachedSource<Key, Value> {
         }
     }
 
-    // Guard against wrong cache Map
-    // if a regular Map is accidentally used for byte[] type keys
-    // the situation might be tricky to debug
-    private void checkByteArrKey(Key key) {
-        if (checked) return;
-
-        if (key instanceof byte[]) {
-            if (!(cache instanceof ByteArrayMap)) {
-                throw new RuntimeException("Wrong map/set for byte[] key");
-            }
-        }
-        checked = true;
-    }
 
     public long debugCacheSize() {
         long ret = 0;
@@ -311,19 +210,21 @@ public class WriteCache<Key, Value> extends AbstractCachedSource<Key, Value> {
      * Shortcut for WriteCache with byte[] keys. Also prevents accidental
      * usage of regular Map implementation (non byte[])
      */
-    public static class BytesKey<V> extends WriteCache<byte[], V> implements CachedSource.BytesKey<V> {
+    public static class BytesKey<V> extends SimplifiedWriteCache<byte[], V> implements CachedSource.BytesKey<V> {
 
-        public BytesKey(Source<byte[], V> src, CacheType cacheType) {
-            super(src, cacheType);
+        public BytesKey(Source<byte[], V> src) {
+            super(src);
             withCache(new ByteArrayMap<CacheEntry<V>>());
         }
     }
-
-    public Map<Key, CacheEntry<Value>> getCache() {
+    
+    public Map<Key, CacheEntry<Value>> getCache(){
     	return this.cache;
     }
     
-    public void resetModified() {
-    	modified = false;
-    }
+    public Value getFromSource(Key key) {
+      try (ALock l = readLock.lock()){        
+        return getSource() == null ? null : getSource().get(key);
+      }
+  }
 }

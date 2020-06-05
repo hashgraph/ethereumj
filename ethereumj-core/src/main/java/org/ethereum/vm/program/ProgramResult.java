@@ -47,6 +47,7 @@ public class ProgramResult {
     private List<InternalTransaction> internalTransactions;
     private List<LogInfo> logInfoList;
     private long futureRefund = 0;
+    private long storageGasUsed = 0;
 
     /*
      * for testing runs ,
@@ -194,6 +195,7 @@ public class ProgramResult {
             addLogInfos(another.getLogInfoList());
             addFutureRefund(another.getFutureRefund());
             addTouchAccounts(another.getTouchedAccounts());
+            addStorageGas(another.getStorageGasUsed());
         }
     }
     
@@ -201,5 +203,13 @@ public class ProgramResult {
         ProgramResult result = new ProgramResult();
         result.setHReturn(EMPTY_BYTE_ARRAY);
         return result;
+    }
+
+    public void addStorageGas(long storageGas) {
+    	storageGasUsed += storageGas;
+    }
+    
+    public long getStorageGasUsed() {
+    	return storageGasUsed;
     }
 }

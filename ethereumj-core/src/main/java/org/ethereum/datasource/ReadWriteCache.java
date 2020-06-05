@@ -35,11 +35,26 @@ public class ReadWriteCache<Key, Value>
         super(source);
     }
 
+    public ReadWriteCache(Source<Key, Value> src , WriteCache<Key, Value> writeCacheParam) {
+    	super(src);
+    	add(writeCache = writeCacheParam);
+    	add(readCache = new ReadCache<>(writeCacheParam));
+    	readCache.setFlushSource(true);
+    }
+
     public ReadWriteCache(Source<Key, Value> src, WriteCache.CacheType cacheType) {
         super(src);
         add(writeCache = new WriteCache<>(src, cacheType));
         add(readCache = new ReadCache<>(writeCache));
         readCache.setFlushSource(true);
+    }
+
+    @Override
+    public void delete(Key key) {
+        super.delete(key);
+        writeCache.getCache().remove(key);
+        readCache.delete(key);
+        writeCache.delete(key);
     }
 
     @Override

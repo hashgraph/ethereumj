@@ -44,6 +44,7 @@ public final class DataWord implements Comparable<DataWord> {
 
     /* Maximum value of the DataWord */
     public static final int MAX_POW = 256;
+    public static final int DATA_WORD_BYTES = 32;
     public static final BigInteger _2_256 = BigInteger.valueOf(2).pow(MAX_POW);
     public static final BigInteger MAX_VALUE = _2_256.subtract(BigInteger.ONE);
     public static final DataWord ZERO = new DataWord(new byte[32]);
@@ -64,7 +65,7 @@ public final class DataWord implements Comparable<DataWord> {
      *  - {@link #of(int)}
      * @param data Byte Array[32] which is guaranteed to be immutable
      */
-    private DataWord(byte[] data) {
+    public DataWord(byte[] data) {
         if (data == null || data.length != 32) throw new RuntimeException("Input byte array should have 32 bytes in it!");
         this.data = data;
     }

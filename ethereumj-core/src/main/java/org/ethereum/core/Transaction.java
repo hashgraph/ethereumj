@@ -17,6 +17,7 @@
  */
 package org.ethereum.core;
 
+import org.apache.commons.lang3.StringUtils;
 import static org.apache.commons.lang3.ArrayUtils.isEmpty;
 import static org.ethereum.datasource.MemSizeEstimator.ByteArrayEstimator;
 import static org.ethereum.util.ByteUtil.EMPTY_BYTE_ARRAY;
@@ -87,6 +88,8 @@ public class Transaction {
      * Initialization code for a new contract */
     private byte[] data;
 
+    private byte[] contractAddress;
+
     /**
      * Since EIP-155, we could encode chainId in V
      */
@@ -110,6 +113,45 @@ public class Transaction {
     public Transaction(byte[] rawData) {
         this.rlpEncoded = rawData;
         parsed = false;
+    }
+    public Transaction(
+        BigInteger nonce, 
+        BigInteger gasPrice, 
+        BigInteger gasLimit,
+        String senderAddress, 
+        String receiveAddress, 
+        BigInteger value, 
+        String data
+    ) {
+        this.nonce =  ByteUtil.bigIntegerToBytes(nonce);
+        this.gasPrice = ByteUtil.bigIntegerToBytes(gasPrice);
+        this.gasLimit = ByteUtil.bigIntegerToBytes(gasLimit);
+
+        if (value == null || value.compareTo(BigInteger.ZERO)<1) {
+            this.value = EMPTY_BYTE_ARRAY;
+        } else {
+            this.value = ByteUtil.bigIntegerToBytes(value);
+        }
+
+        if (StringUtils.isEmpty(data)) {
+            this.data = ByteUtil.EMPTY_BYTE_ARRAY;
+        } else {
+            this.data = ByteUtil.hexStringToBytes(data);
+        }
+
+        if (StringUtils.isEmpty(receiveAddress )) {
+            this.receiveAddress = ByteUtil.EMPTY_BYTE_ARRAY;
+        } else {
+            this.receiveAddress = ByteUtil.hexStringToBytes(receiveAddress);
+        }
+
+        if (StringUtils.isEmpty(senderAddress )) {
+            this.sendAddress = ByteUtil.EMPTY_BYTE_ARRAY;
+        } else {
+            this.sendAddress = ByteUtil.hexStringToBytes(senderAddress);
+        }
+
+        parsed = true;
     }
 
     public Transaction(byte[] nonce, byte[] gasPrice, byte[] gasLimit, byte[] receiveAddress, byte[] value, byte[] data,
@@ -360,7 +402,14 @@ public class Transaction {
 
     public byte[] getContractAddress() {
         if (!isContractCreation()) return null;
-        return HashUtil.calcNewAddr(this.getSender(), this.getNonce());
+        if (contractAddress == null) {
+            contractAddress = HashUtil.calcNewAddr(this.getSender(), this.getNonce());
+        }
+        return contractAddress;
+    }
+
+    public void setContractAddress(byte[] contractAddress) {
+    	this.contractAddress = contractAddress;
     }
 
     public boolean isContractCreation() {

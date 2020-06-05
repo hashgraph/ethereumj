@@ -26,6 +26,7 @@ import org.ethereum.core.*;
 import org.ethereum.db.BlockStore;
 import org.ethereum.mine.EthashMiner;
 import org.ethereum.mine.MinerIfc;
+import org.ethereum.util.Utils;
 import org.ethereum.validator.BlockHeaderValidator;
 import org.ethereum.vm.DataWord;
 import org.ethereum.vm.GasCost;
@@ -137,10 +138,8 @@ public abstract class AbstractConfig implements BlockchainConfig, BlockchainNetC
 
     @Override
     public DataWord getCallGas(OpCode op, DataWord requestedGas, DataWord availableGas) throws Program.OutOfGasException {
-        if (requestedGas.compareTo(availableGas) > 0) {
-            throw Program.Exception.notEnoughOpGas(op, requestedGas, availableGas);
-        }
-        return requestedGas;
+        DataWord maxAllowed = Utils.allButOne64th(availableGas);
+        return requestedGas.compareTo(maxAllowed) > 0 ? maxAllowed : requestedGas;
     }
 
     @Override

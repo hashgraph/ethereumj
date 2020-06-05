@@ -37,7 +37,9 @@ import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.stream.Stream;
 
+import static org.ethereum.vm.DataWord.DATA_WORD_BYTES;
 import static org.ethereum.crypto.HashUtil.sha3;
+import org.ethereum.util.ByteUtil;
 import static org.ethereum.util.ByteUtil.EMPTY_BYTE_ARRAY;
 import static org.ethereum.util.ByteUtil.toHexString;
 import static org.ethereum.vm.OpCode.*;
@@ -81,7 +83,6 @@ import static org.ethereum.vm.VMUtils.getSizeInWords;
  * @since 01.06.2014
  */
 public class VM {
-
     private static final Logger logger = LoggerFactory.getLogger("VM");
     private static final Logger dumpLogger = LoggerFactory.getLogger("dump");
     private static BigInteger _32_ = BigInteger.valueOf(32);
@@ -90,6 +91,10 @@ public class VM {
     // max mem size which couldn't be paid for ever
     // used to reduce expensive BigInt arithmetic
     private static BigInteger MAX_MEM_SIZE = BigInteger.valueOf(Integer.MAX_VALUE);
+
+    private static final long UNKNOWN = -1;
+    /* Cost of adding a new (key, value) storage entry in the context of the active program. */
+    private long sstore_gas_cost = UNKNOWN;
 
     /* Keeps track of the number of steps performed in this VM */
     private int vmCounter = 0;
@@ -185,7 +190,6 @@ public class VM {
     }
 
     public void step(Program program) {
-
         if (vmTrace) {
             program.saveOpTrace();
         }
@@ -198,7 +202,7 @@ public class VM {
                 throw Program.Exception.invalidOpCode(program.getCurrentOp());
             }
 
-            validateOp(op, program);
+            /* All ops are valid for Hedera Smart Contract Service at this time, skip validateOp(op, program) */
 
             program.setLastOp(op.val());
             program.verifyStackSize(op.require());
@@ -214,6 +218,7 @@ public class VM {
             int stepBefore = program.getPC();
             GasCost gasCosts = blockchainConfig.getGasCost();
             DataWord adjustedCallGas = null;
+            long storageGasUsed = 0;
 
             /*DEBUG #POC9 if( op.asInt() == 96 || op.asInt() == -128 || op.asInt() == 57 || op.asInt() == 115) {
               //byte alphaone = 0x63;
@@ -247,53 +252,19 @@ public class VM {
                     }
                     break;
                 case SSTORE:
-                    DataWord currentValue = program.getCurrentValue(stack.peek());
-                    if (currentValue == null) currentValue = DataWord.ZERO;
                     DataWord newValue = stack.get(stack.size() - 2);
-
-                    if (blockchainConfig.eip1283()) { // Net gas metering for SSTORE
-                        if (newValue.equals(currentValue)) {
-                            gasCost = gasCosts.getREUSE_SSTORE();
-                        } else {
-                            DataWord origValue = program.getOriginalValue(stack.peek());
-                            if (origValue == null) origValue = DataWord.ZERO;
-                            if (currentValue.equals(origValue)) {
-                                if (origValue.isZero()) {
-                                    gasCost = gasCosts.getSET_SSTORE();
-                                } else {
-                                    gasCost = gasCosts.getCLEAR_SSTORE();
-                                    if (newValue.isZero()) {
-                                        program.futureRefundGas(gasCosts.getREFUND_SSTORE());
-                                    }
-                                }
-                            } else {
-                                gasCost = gasCosts.getREUSE_SSTORE();
-                                if (!origValue.isZero()) {
-                                    if (currentValue.isZero()) {
-                                        program.futureRefundGas(-gasCosts.getREFUND_SSTORE());
-                                    } else if (newValue.isZero()) {
-                                        program.futureRefundGas(gasCosts.getREFUND_SSTORE());
-                                    }
-                                }
-                                if (origValue.equals(newValue)) {
-                                    if (origValue.isZero()) {
-                                        program.futureRefundGas(gasCosts.getSET_SSTORE() - gasCosts.getREUSE_SSTORE());
-                                    } else {
-                                        program.futureRefundGas(gasCosts.getCLEAR_SSTORE() - gasCosts.getREUSE_SSTORE());
-                                    }
-                                }
-                            }
+                    DataWord currentValue = program.getCurrentValue(stack.peek());
+                    if (currentValue == null && !newValue.isZero()) {
+                        if (sstore_gas_cost == UNKNOWN) {
+                            long gasPrice = ByteUtil.byteArrayToLong(program.getGasPrice().getData());
+                            long durationSecs = program.getOwnerRemainingDuration();
+                            sstore_gas_cost = Program.calculateStorageGasNeeded(
+                                2 * DATA_WORD_BYTES, durationSecs, program.getSbh(), gasPrice);
                         }
-                    } else { // Before EIP-1283 cost calculation
-                        if (currentValue.isZero() && !newValue.isZero())
-                            gasCost = gasCosts.getSET_SSTORE();
-                        else if (!currentValue.isZero() && newValue.isZero()) {
-                            // refund step cost policy.
-                            program.futureRefundGas(gasCosts.getREFUND_SSTORE());
-                            gasCost = gasCosts.getCLEAR_SSTORE();
-                        } else {
-                            gasCost = gasCosts.getRESET_SSTORE();
-                        }
+                        gasCost = sstore_gas_cost;
+                        storageGasUsed = gasCost;
+                    } else if (currentValue != null && !newValue.isZero()) {
+                        gasCost = gasCosts.getRESET_SSTORE();
                     }
                     break;
                 case SLOAD:
@@ -350,7 +321,6 @@ public class VM {
                 case CALLCODE:
                 case DELEGATECALL:
                 case STATICCALL:
-
                     gasCost = gasCosts.getCALL();
                     DataWord callGasWord = stack.get(stack.size() - 1);
 
@@ -372,7 +342,6 @@ public class VM {
                         }
                     }
 
-                    //TODO #POC9 Make sure this is converted to BigInteger (256num support)
                     if (!value.isZero() )
                         gasCost += gasCosts.getVT_CALL();
 
@@ -391,33 +360,22 @@ public class VM {
                     gasCost += adjustedCallGas.longValueSafe();
                     break;
                 case CREATE:
+                case CREATE2:
                     gasCost = gasCosts.getCREATE() + calcMemGas(gasCosts, oldMemSize,
                             memNeeded(stack.get(stack.size() - 2), stack.get(stack.size() - 3)), 0);
-                    break;
-                case CREATE2:
-                    DataWord codeSize = stack.get(stack.size() - 3);
-                    gasCost = gasCosts.getCREATE() +
-                            calcMemGas(gasCosts, oldMemSize, memNeeded(stack.get(stack.size() - 2), codeSize), 0) +
-                            getSizeInWords(codeSize.longValueSafe()) * gasCosts.getSHA3_WORD();
                     break;
                 case LOG0:
                 case LOG1:
                 case LOG2:
                 case LOG3:
                 case LOG4:
-
                     int nTopics = op.val() - OpCode.LOG0.val();
-
                     BigInteger dataSize = stack.get(stack.size() - 2).value();
-                    BigInteger dataCost = dataSize.multiply(BigInteger.valueOf(gasCosts.getLOG_DATA_GAS()));
-                    if (program.getGas().value().compareTo(dataCost) < 0) {
-                        throw Program.Exception.notEnoughOpGas(op, dataCost, program.getGas().value());
-                    }
-
-                    gasCost = gasCosts.getLOG_GAS() +
-                            gasCosts.getLOG_TOPIC_GAS() * nTopics +
-                            gasCosts.getLOG_DATA_GAS() * stack.get(stack.size() - 2).longValue() +
-                            calcMemGas(gasCosts, oldMemSize, memNeeded(stack.peek(), stack.get(stack.size() - 2)), 0);
+                    long logStorageTotalSize = Program.calculateLogSize(nTopics, dataSize.longValue());
+                    long gasPrice = ByteUtil.byteArrayToLong(program.getGasPrice().getData());
+                    gasCost = Program.calculateStorageGasNeeded(
+                        logStorageTotalSize, program.getLogStorageDuration(), program.getRbh(), gasPrice);
+                    storageGasUsed = gasCost;
                     break;
                 case EXP:
 
@@ -429,8 +387,10 @@ public class VM {
                     break;
             }
 
-            //DEBUG System.out.println(" OP IS " + op.name() + " GASCOST IS " + gasCost + " NUM IS " + op.asInt());
             program.spendGas(gasCost, op.name());
+            if (storageGasUsed > 0) {
+            	program.registerStorageGasUsed(storageGasUsed, op.name());
+            }
 
             // Log debugging line for VM
             if (program.getNumber().intValue() == dumpBlock) {
@@ -461,7 +421,6 @@ public class VM {
                     DataWord addResult = word1.add(word2);
                     program.stackPush(addResult);
                     program.step();
-
                 }
                 break;
                 case MUL: {
@@ -574,7 +533,6 @@ public class VM {
                 }
                 break;
                 case LT: {
-                    // TODO: can be improved by not using BigInteger
                     DataWord word1 = program.stackPop();
                     DataWord word2 = program.stackPop();
 
@@ -590,7 +548,6 @@ public class VM {
                 }
                 break;
                 case SLT: {
-                    // TODO: can be improved by not using BigInteger
                     DataWord word1 = program.stackPop();
                     DataWord word2 = program.stackPop();
 
@@ -606,7 +563,6 @@ public class VM {
                 }
                 break;
                 case SGT: {
-                    // TODO: can be improved by not using BigInteger
                     DataWord word1 = program.stackPop();
                     DataWord word2 = program.stackPop();
 
@@ -622,7 +578,6 @@ public class VM {
                 }
                 break;
                 case GT: {
-                    // TODO: can be improved by not using BigInteger
                     DataWord word1 = program.stackPop();
                     DataWord word2 = program.stackPop();
 
@@ -1265,7 +1220,6 @@ public class VM {
                     int nPush = op.val() - PUSH1.val() + 1;
 
                     byte[] data = program.sweep(nPush);
-
                     if (logger.isInfoEnabled())
                         hint = "" + toHexString(data);
 
@@ -1308,7 +1262,7 @@ public class VM {
                                 program.getGas().value(),
                                 program.getCallDeep(), hint);
 
-                    program.createContract2(value, inOffset, inSize, salt);
+                    program.createContract(value, inOffset, inSize);
 
                     program.step();
                 }
@@ -1437,7 +1391,6 @@ public class VM {
             while (!program.isStopped()) {
                 this.step(program);
             }
-
         } catch (RuntimeException e) {
             program.setRuntimeFailure(e);
         } catch (StackOverflowError soe) {

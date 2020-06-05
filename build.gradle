@@ -24,9 +24,12 @@ subprojects {
 
     def config = new ConfigSlurper().parse(new File("$projectDir/src/main/resources/version.properties").toURI().toURL())
 
-    group = 'org.ethereum'
+    group = 'com.hedera.hashgraph'
 
-    version = config.versionNumber + ("master" == gitCurBranch() ? "-RELEASE" : "-SNAPSHOT")
+    version = config.versionNumber + [
+      master: '-RELEASE',
+      hedera: "-v$config.hederaVersion"
+    ].get(gitCurBranch(), "-SNAPSHOT")
 
     println("Building version: " + version + " (from branch " + gitCurBranch() + ")")
 

@@ -1,126 +1,35 @@
-# Welcome to ethereumj
+# EVM adapter for Hedera Smart Contract Services
 
-[![Gitter](https://badges.gitter.im/Join%20Chat.svg)](https://gitter.im/ethereum/ethereumj?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge&utm_content=badge)
-[![Build Status](https://travis-ci.org/ethereum/ethereumj.svg?branch=master)](https://travis-ci.org/ethereum/ethereumj)
-[![Coverage Status](https://coveralls.io/repos/ethereum/ethereumj/badge.png?branch=master)](https://coveralls.io/r/ethereum/ethereumj?branch=master)
+The Hedera Smart Contract Service supports Solidity contracts 
+with `pragma solidity <=0.5.9`, where the semantics of a 
+transaction sent to a Hedera Solidity contract are largely
+equivalent to the semantics of a transaction sent to an 
+Ethereum smart contract. This equivalence derives from reuse
+of the `ethereumj` EVM implementation, with a handful of
+adaptations.
 
+The adaptations are as follows:
+  1. Extend the `org.ethereum.core.AccountState` type to include 
+    properties used by the Hedera network.
+  2. Suppress the loading and persistence of (key-scoped) contract 
+    storage from the `org.ethereum.datasource.Source`s
+    that back storage caches used by `org.ethereum.db.RepositoryRoot`; 
+    instead, use an `org.ethereum.datasource.StoragePersistence` 
+    to perform (contract-scoped) storage loading and persistence upon 
+    creation of each storage cache.
+  3. Modify the gas cost calculation for the `SSTORE` and 
+    `LOG{0-4}` EVM opcodes to reflect the active Hedera resource 
+    prices for disk and RAM, respectively.
+  4. Generate new contract addresses using an injected 
+    `org.ethereum.vm.program.NewAccountCreateAdapter` rather than 
+    the hash of the creator address and nonce.
+  5. Delegate the `CREATE2` opcode to the `CREATE` opcode (the
+    semantics introduced with `CREATE2` are irrelevant given 
+    the preceding item).
+  6. Change `slf4j` binding to `org.apache.logging.log4j`.
 
-# About
-EthereumJ is a pure-Java implementation of the Ethereum protocol. For high-level information about Ethereum and its goals, visit [ethereum.org](https://ethereum.org). The [ethereum white paper](https://github.com/ethereum/wiki/wiki/White-Paper) provides a complete conceptual overview, and the [yellow paper](http://gavwood.com/Paper.pdf) provides a formal definition of the protocol.
-
-We keep EthereumJ as thin as possible. For [JSON-RPC](https://github.com/ethereum/wiki/wiki/JSON-RPC) support and other client features check [Ethereum Harmony](https://github.com/ether-camp/ethereum-harmony).
-
-# Running EthereumJ
-
-##### Adding as a dependency to your Maven project: 
-
-```
-   <dependency>
-     <groupId>org.ethereum</groupId>
-     <artifactId>ethereumj-core</artifactId>
-     <version>1.11.0-RELEASE</version>
-   </dependency>
-```
-
-##### or your Gradle project: 
-
-```
-   repositories {
-       mavenCentral()
-       jcenter()
-       maven { url "https://dl.bintray.com/ethereum/maven/" }
-   }
-   implementation "org.ethereum:ethereumj-core:1.9.+"
-```
-
-As a starting point for your own project take a look at https://github.com/ether-camp/ethereumj.starter
-
-##### Building an executable JAR
-```
-git clone https://github.com/ethereum/ethereumj
-cd ethereumj
-cp ethereumj-core/src/main/resources/ethereumj.conf ethereumj-core/src/main/resources/user.conf
-vim ethereumj-core/src/main/resources/user.conf # adjust user.conf to your needs
-./gradlew clean fatJar
-java -jar ethereumj-core/build/libs/ethereumj-core-*-all.jar
-```
-
-##### Running from command line:
-```
-> git clone https://github.com/ethereum/ethereumj
-> cd ethereumj
-> ./gradlew run [-PmainClass=<sample class>]
-```
-
-##### Optional samples to try:
-```
-./gradlew run -PmainClass=org.ethereum.samples.BasicSample
-./gradlew run -PmainClass=org.ethereum.samples.FollowAccount
-./gradlew run -PmainClass=org.ethereum.samples.PendingStateSample
-./gradlew run -PmainClass=org.ethereum.samples.PriceFeedSample
-./gradlew run -PmainClass=org.ethereum.samples.PrivateMinerSample
-./gradlew run -PmainClass=org.ethereum.samples.TestNetSample
-./gradlew run -PmainClass=org.ethereum.samples.TransactionBomb
-```
-
-##### For snapshot builds:
-Please, note, snapshots are not stable and are currently in development! If you still want to try it:
-
- - Add https://oss.jfrog.org/libs-snapshot/ as a repository to your build script
- - Add a dependency on `org.ethereum:ethereumj-core:${VERSION}`, where `${VERSION}` is of the form `1.11.0-SNAPSHOT`.
-
-Example:
-
-    <repository>
-        <id>jfrog-snapshots</id>
-        <name>oss.jfrog.org</name>
-        <url>https://oss.jfrog.org/libs-snapshot/</url>
-        <snapshots><enabled>true</enabled></snapshots>
-    </repository>
-    <!-- ... -->
-    <dependency>
-       <groupId>org.ethereum</groupId>
-       <artifactId>ethereumj-core</artifactId>
-       <version>1.11.0-SNAPSHOT</version>
-    </dependency>
-
-##### Importing project to IntelliJ IDEA: 
-```
-> git clone https://github.com/ethereum/ethereumj
-> cd ethereumj
-> gradlew build
-```
-  IDEA: 
-* File -> New -> Project from existing sources…
-* Select ethereumj/build.gradle
-* Dialog “Import Project from gradle”: press “OK”
-* After building run either `org.ethereum.Start`, one of `org.ethereum.samples.*` or create your own main. 
-
-# Configuring EthereumJ
-
-For reference on all existing options, their description and defaults you may refer to the default config `ethereumj.conf` (you may find it in either the library jar or in the source tree `ethereum-core/src/main/resources`) 
-To override needed options you may use one of the following ways: 
-* put your options to the `<working dir>/config/ethereumj.conf` file
-* put `user.conf` to the root of your classpath (as a resource) 
-* put your options to any file and supply it via `-Dethereumj.conf.file=<your config>`, accepts several configs, separated by comma applied in provided order: `-Dethereumj.conf.file=<config1>,<config2>`
-* programmatically by using `SystemProperties.CONFIG.override*()`
-* programmatically using by overriding Spring `SystemProperties` bean 
-
-Note that don’t need to put all the options to your custom config, just those you want to override. 
-
-# Special thanks
-YourKit for providing us with their nice profiler absolutely for free.
-
-YourKit supports open source projects with its full-featured Java Profiler.
-YourKit, LLC is the creator of <a href="https://www.yourkit.com/java/profiler/">YourKit Java Profiler</a>
-and <a href="https://www.yourkit.com/.net/profiler/">YourKit .NET Profiler</a>,
-innovative and intelligent tools for profiling Java and .NET applications.
-
-![YourKit Logo](https://www.yourkit.com/images/yklogo.png)
-
-# Contact
-Chat with us via [Gitter](https://gitter.im/ethereum/ethereumj)
+For a complete view of the Hedera adaptations, please perform a 
+`git diff` of this branch and the `1.12.0` tag.
 
 # License
-ethereumj is released under the [LGPL-V3 license](LICENSE).
-
+`ethereumj` is released under the [LGPL-V3 license](https://github.com/hashgraph/ethereumj/blob/develop/LICENSE).
