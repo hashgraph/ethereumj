@@ -15,7 +15,11 @@ def gitCurBranch() {
 
     if (branchName) return branchName
     def process = "git rev-parse --abbrev-ref HEAD".execute()
-    return process.text.trim()
+    def effBranchName = process.text.trim()
+    if (effBranchName.contains('-')) {
+      effBranchName = effBranchName[0..<effBranchName.indexOf('-')]
+    }
+    return effBranchName
 }
 
 subprojects {
