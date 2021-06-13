@@ -1325,7 +1325,6 @@ public class Program {
             return;
         }
 
-
         byte[] data = this.memoryChunk(msg.getInDataOffs().intValue(),
                 msg.getInDataSize().intValue());
         System.out.println("Since " 
@@ -1358,7 +1357,7 @@ public class Program {
             if (logger.isDebugEnabled())
                 logger.debug("Call {}(data = {})", contract.getClass().getSimpleName(), toHexString(data));
 
-            Pair<Boolean, byte[]> out = contract.execute(data);
+            Pair<Boolean, byte[]> out = contract.execute(data, senderAddress, track);
             System.out.println("Executed! Got " + out.getLeft() 
                 + " and " + toHexString(out.getRight()));
 

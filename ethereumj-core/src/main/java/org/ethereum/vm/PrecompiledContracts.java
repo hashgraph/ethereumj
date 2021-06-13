@@ -24,12 +24,14 @@ import org.ethereum.crypto.ECKey;
 import org.ethereum.crypto.HashUtil;
 import org.ethereum.crypto.zksnark.*;
 import org.ethereum.util.BIUtil;
+import org.ethereum.core.Repository;
 
 import java.math.BigInteger;
 
 import static org.ethereum.util.BIUtil.addSafely;
 import static org.ethereum.util.BIUtil.isLessThan;
 import static org.ethereum.util.BIUtil.isZero;
+import static org.ethereum.util.BIUtil.transfer;
 import static org.ethereum.util.ByteUtil.*;
 import static org.ethereum.vm.VMUtils.getSizeInWords;
 
@@ -44,6 +46,7 @@ public class PrecompiledContracts {
     private static final Ripempd160 ripempd160 = new Ripempd160();
     private static final Identity identity = new Identity();
     private static final TokenTransfer tokenTransfer = new TokenTransfer();
+    private static final TokenBalance tokenBalance = new TokenBalance();
     private static final ModExp modExp = new ModExp();
     private static final BN128Addition altBN128Add = new BN128Addition();
     private static final BN128Multiplication altBN128Mul = new BN128Multiplication();
@@ -58,6 +61,7 @@ public class PrecompiledContracts {
     private static final DataWord altBN128MulAddr =     DataWord.of("0000000000000000000000000000000000000000000000000000000000000007");
     private static final DataWord altBN128PairingAddr = DataWord.of("0000000000000000000000000000000000000000000000000000000000000008");
     private static final DataWord tokenTransferAddr = DataWord.of("0000000000000000000000000000000000000000000000000000000000000777");
+    private static final DataWord tokenBalanceAddr = DataWord.of("0000000000000000000000000000000000000000000000000000000000000888");
 
     public static PrecompiledContract getContractForAddress(DataWord address, BlockchainConfig config) {
 
@@ -67,6 +71,7 @@ public class PrecompiledContracts {
         if (address.equals(ripempd160Addr)) return ripempd160;
         if (address.equals(identityAddr)) return identity;
         if (address.equals(tokenTransferAddr)) return tokenTransfer;
+        if (address.equals(tokenBalanceAddr)) return tokenBalance;
 
         // Byzantium precompiles
         if (address.equals(modExpAddr) && config.eip198()) return modExp;
@@ -94,6 +99,10 @@ public class PrecompiledContracts {
         public abstract long getGasForData(byte[] data);
 
         public abstract Pair<Boolean, byte[]> execute(byte[] data);
+
+        public Pair<Boolean, byte[]> execute(byte[] data, byte[] senderAddress, Repository repository) {
+          return execute(data);
+        }
     }
 
     public static class Identity extends PrecompiledContract {
@@ -496,13 +505,58 @@ public class PrecompiledContracts {
     public static class TokenTransfer extends PrecompiledContract {
         @Override
         public long getGasForData(byte[] data) {
-            return 100000;
+            return 1;
         }
 
         @Override
         public Pair<Boolean, byte[]> execute(byte[] data) {
             System.out.println("(TTransfer) data=" + Hex.toHexString(data));
             return Pair.of(true, DataWord.ONE.getData());
+        }
+
+        @Override
+        public Pair<Boolean, byte[]> execute(byte[] data, byte[] senderAddress, Repository repository) {
+          /*
+          byte[] receiverAddress = new byte[20];
+          System.arraycopy(data, 0, 20, receiverAddress, 0, 20);
+          byte[] tokenType = new byte[20];
+          System.arraycopy(data, 20, 20, tokenType, 0, 20);
+          byte[] scopedSender = new byte[40];
+          */
+
+          System.out.println("(Real TTransfer) data=" + Hex.toHexString(data));
+          return execute(data);
+        }
+    }
+
+    public static class TokenBalance extends PrecompiledContract {
+        @Override
+        public long getGasForData(byte[] data) {
+            return 1;
+        }
+
+        @Override
+        public Pair<Boolean, byte[]> execute(byte[] data) {
+            return Pair.of(true, DataWord.ONE.getData());
+        }
+
+        @Override
+        public Pair<Boolean, byte[]> execute(byte[] data, byte[] senderAddress, Repository repository) {
+          /*
+          byte[] receiverAddress = new byte[20];
+          System.arraycopy(data, 0, 20, receiverAddress, 0, 20);
+          byte[] tokenType = new byte[20];
+          System.arraycopy(data, 20, 20, tokenType, 0, 20);
+          byte[] scopedSender = new byte[40];
+          */
+
+          byte[] scopedAddress = new byte[40];
+          System.arraycopy(senderAddress, 0, scopedAddress, 0, 20);
+          System.arraycopy(data, 0, scopedAddress, 20, 20);
+          System.out.println("(Real TBalance) data=" + Hex.toHexString(data));
+          System.out.println(" -> ScopedAddress=" + Hex.toHexString(scopedAddress));
+          BigInteger balance = repository.getBalance(scopedAddress);
+          return Pair.of(true, DataWord.of(balance.longValue()).getData());
         }
     }
 }
