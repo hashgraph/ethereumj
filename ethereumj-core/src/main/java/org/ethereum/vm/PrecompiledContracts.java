@@ -24,6 +24,7 @@ import org.ethereum.crypto.ECKey;
 import org.ethereum.crypto.HashUtil;
 import org.ethereum.crypto.zksnark.*;
 import org.ethereum.util.BIUtil;
+import org.ethereum.util.ByteUtil;
 import org.ethereum.core.Repository;
 
 import java.math.BigInteger;
@@ -516,16 +517,24 @@ public class PrecompiledContracts {
 
         @Override
         public Pair<Boolean, byte[]> execute(byte[] data, byte[] senderAddress, Repository repository) {
-          /*
-          byte[] receiverAddress = new byte[20];
-          System.arraycopy(data, 0, 20, receiverAddress, 0, 20);
-          byte[] tokenType = new byte[20];
-          System.arraycopy(data, 20, 20, tokenType, 0, 20);
-          byte[] scopedSender = new byte[40];
-          */
-
           System.out.println("(Real TTransfer) data=" + Hex.toHexString(data));
-          return execute(data);
+
+          byte[] receiverAddress = new byte[20];
+          System.arraycopy(data, 0, receiverAddress, 0, 20);
+          byte[] tokenType = new byte[20];
+          System.arraycopy(data, 20, tokenType, 0, 20);
+          byte[] value = new byte[32];
+          System.arraycopy(data, 40, value, 0, 32);
+          BigInteger amount = DataWord.of(value).value();
+
+          byte[] scopedSender = ByteUtil.merge(senderAddress, tokenType);
+          byte[] scopedReceiver = ByteUtil.merge(receiverAddress, tokenType);
+          System.out.println("  ==> Transferring " + amount 
+              + " from (scoped)" + Hex.toHexString(scopedSender)
+              + " to (scoped)" + Hex.toHexString(scopedReceiver));
+          BIUtil.transfer(repository, scopedSender, scopedReceiver, amount);
+
+          return Pair.of(true, value);
         }
     }
 
@@ -542,20 +551,12 @@ public class PrecompiledContracts {
 
         @Override
         public Pair<Boolean, byte[]> execute(byte[] data, byte[] senderAddress, Repository repository) {
-          /*
-          byte[] receiverAddress = new byte[20];
-          System.arraycopy(data, 0, 20, receiverAddress, 0, 20);
-          byte[] tokenType = new byte[20];
-          System.arraycopy(data, 20, 20, tokenType, 0, 20);
-          byte[] scopedSender = new byte[40];
-          */
-
           byte[] scopedAddress = new byte[40];
           System.arraycopy(senderAddress, 0, scopedAddress, 0, 20);
           System.arraycopy(data, 0, scopedAddress, 20, 20);
           System.out.println("(Real TBalance) data=" + Hex.toHexString(data));
-          System.out.println(" -> ScopedAddress=" + Hex.toHexString(scopedAddress));
           BigInteger balance = repository.getBalance(scopedAddress);
+          System.out.println(" -> ScopedAddress=" + Hex.toHexString(scopedAddress) + " has balance " + balance);
           return Pair.of(true, DataWord.of(balance.longValue()).getData());
         }
     }
