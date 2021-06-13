@@ -1314,6 +1314,7 @@ public class VM {
                     }
 
                     if (contract != null) {
+                        System.out.println("VM identified precompiled contract at address " + toHexString(codeAddress.getLast20Bytes()));
                         program.callToPrecompiledAddress(msg, contract);
                     } else {
                         program.callToAddress(msg);

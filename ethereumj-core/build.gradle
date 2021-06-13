@@ -126,14 +126,6 @@ dependencies {
     compile "com.madgag.spongycastle:core:${scastleVersion}" // for SHA3 and SECP256K1
     compile "com.madgag.spongycastle:prov:${scastleVersion}" // for SHA3 and SECP256K1
 
-    compile "org.iq80.leveldb:leveldb:${leveldbVersion}"     // Java API wrapper around native components
-
-    compile "org.ethereum:leveldbjni-all:1.18.3"             // native leveldb components
-
-    compile "org.ethereum:rocksdbjni:5.9.2"                   // RocksDB Java API
-
-    compile "org.ethereum:solcJ-all:0.4.25"                  // Solidity Compiler win/mac/linux binaries
-
     compile "com.google.guava:guava:24.1-jre"
 
     compile "com.cedarsoftware:java-util:1.8.0" // for deep equals
@@ -158,7 +150,7 @@ dependencies {
 
     testCompile "junit:junit:${junitVersion}"
     testCompile "org.springframework:spring-test:${springVersion}"
-    testCompile "org.mockito:mockito-core:2.82"
+    testCompile "org.mockito:mockito-core:2.8.9"
     testCompile "com.github.briandilley.jsonrpc4j:jsonrpc4j:1.1"
 }
 

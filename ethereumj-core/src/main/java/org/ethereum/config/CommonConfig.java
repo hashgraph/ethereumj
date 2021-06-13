@@ -21,13 +21,10 @@ import org.ethereum.core.Repository;
 import org.ethereum.crypto.HashUtil;
 import org.ethereum.datasource.*;
 import org.ethereum.datasource.inmem.HashMapDB;
-import org.ethereum.datasource.leveldb.LevelDbDataSource;
-import org.ethereum.datasource.rocksdb.RocksDbDataSource;
 import org.ethereum.db.*;
 import org.ethereum.listener.CompositeEthereumListener;
 import org.ethereum.listener.EthereumListener;
 import org.ethereum.net.eth.handler.Eth63;
-import org.ethereum.sync.FastSyncManager;
 import org.ethereum.validator.*;
 import org.ethereum.vm.DataWord;
 import org.ethereum.vm.program.ProgramPrecompile;
@@ -164,14 +161,7 @@ public class CommonConfig {
         String dataSource = systemProperties().getKeyValueDataSource();
         try {
             DbSource<byte[]> dbSource;
-            if ("inmem".equals(dataSource)) {
-                dbSource = new HashMapDB<>();
-            } else if ("leveldb".equals(dataSource)){
-                dbSource = levelDbDataSource();
-            } else {
-                dataSource = "rocksdb";
-                dbSource = rocksDbDataSource();
-            }
+            dbSource = new HashMapDB<>();
             dbSource.setName(name);
             dbSource.init(settings);
             dbSources.add(dbSource);
@@ -181,36 +171,7 @@ public class CommonConfig {
         }
     }
 
-    @Bean
-    @Scope("prototype")
-    protected LevelDbDataSource levelDbDataSource() {
-        return new LevelDbDataSource();
-    }
-
-    @Bean
-    @Scope("prototype")
-    protected RocksDbDataSource rocksDbDataSource() {
-        return new RocksDbDataSource();
-    }
-
     public void fastSyncCleanUp() {
-        if (!systemProperties().isSyncEnabled()) return;
-        byte[] fastsyncStageBytes = blockchainDB().get(FastSyncManager.FASTSYNC_DB_KEY_SYNC_STAGE);
-        if (fastsyncStageBytes == null) return; // no uncompleted fast sync
-        if (!systemProperties().blocksLoader().isEmpty()) return; // blocks loader enabled
-
-        EthereumListener.SyncState syncStage = EthereumListener.SyncState.values()[fastsyncStageBytes[0]];
-
-        if (!systemProperties().isFastSyncEnabled() || syncStage == EthereumListener.SyncState.UNSECURE) {
-            // we need to cleanup state/blocks/tranasaction DBs when previous fast sync was not complete:
-            // - if we now want to do regular sync
-            // - if the first fastsync stage was not complete (thus DBs are not in consistent state)
-
-            logger.warn("Last fastsync was interrupted. Removing inconsistent DBs...");
-
-            DbSource bcSource = blockchainDB();
-            resetDataSource(bcSource);
-        }
     }
 
     private void resetDataSource(Source source) {

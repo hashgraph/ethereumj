@@ -1311,17 +1311,27 @@ public class Program {
         byte[] codeAddress = msg.getCodeAddress().getLast20Bytes();
         byte[] contextAddress = msg.getType().callIsStateless() ? senderAddress : codeAddress;
 
+        System.out.println("Calling precompiled w/ "
+            + "senderAddress: " + toHexString(senderAddress) + ", "
+            + "codeAddress: " + toHexString(codeAddress) + ", "
+            + "contextAddress: " + toHexString(contextAddress));
 
         BigInteger endowment = msg.getEndowment().value();
         BigInteger senderBalance = track.getBalance(senderAddress);
+        System.out.println(" - sender balance = " + senderBalance);
         if (senderBalance.compareTo(endowment) < 0) {
             stackPushZero();
             this.refundGas(msg.getGas().longValue(), "refund gas from message call");
             return;
         }
 
+
         byte[] data = this.memoryChunk(msg.getInDataOffs().intValue(),
                 msg.getInDataSize().intValue());
+        System.out.println("Since " 
+            + " inDataOffs=" + msg.getInDataOffs().intValue() + ", "
+            + " inDataSize=" + msg.getInDataSize().intValue() + " then "
+            + " data=" + toHexString(data));
 
         // Charge for endowment - is not reversible by rollback
         transfer(track, senderAddress, contextAddress, msg.getEndowment().value());
@@ -1337,7 +1347,6 @@ public class Program {
             return;
         }
 
-
         long requiredGas = contract.getGasForData(data);
         if (requiredGas > msg.getGas().longValue()) {
 
@@ -1350,6 +1359,8 @@ public class Program {
                 logger.debug("Call {}(data = {})", contract.getClass().getSimpleName(), toHexString(data));
 
             Pair<Boolean, byte[]> out = contract.execute(data);
+            System.out.println("Executed! Got " + out.getLeft() 
+                + " and " + toHexString(out.getRight()));
 
             if (out.getLeft()) { // success
                 this.refundGas(msg.getGas().longValue() - requiredGas, "call pre-compiled");

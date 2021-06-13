@@ -22,12 +22,10 @@ import org.ethereum.core.*;
 import org.ethereum.db.BlockStore;
 import org.ethereum.db.DbFlushManager;
 import org.ethereum.db.HeaderStore;
-import org.ethereum.db.migrate.MigrateHeaderSourceTotalDiff;
 import org.ethereum.listener.CompositeEthereumListener;
 import org.ethereum.listener.EthereumListener;
 import org.ethereum.net.client.PeerClient;
 import org.ethereum.net.rlpx.discover.UDPListener;
-import org.ethereum.sync.FastSyncManager;
 import org.ethereum.sync.SyncManager;
 import org.ethereum.net.rlpx.discover.NodeManager;
 import org.ethereum.net.server.ChannelManager;
@@ -257,18 +255,6 @@ public class WorldManager {
      * as Blockstore is incomplete in this mode
      */
     private void fastSyncDbJobs() {
-        // checking if fast sync ran sometime ago with "skipHistory flag"
-        if (blockStore.getBestBlock().getNumber() > 0 &&
-                blockStore.getChainBlockByNumber(1) == null) {
-            FastSyncManager fastSyncManager = ctx.getBean(FastSyncManager.class);
-            if (fastSyncManager.isInProgress()) {
-                return;
-            }
-            logger.info("DB is filled using Fast Sync with skipHistory, adopting headerStore");
-            ((BlockchainImpl) blockchain).setHeaderStore(ctx.getBean(HeaderStore.class));
-        }
-        MigrateHeaderSourceTotalDiff tempMigration = new MigrateHeaderSourceTotalDiff(ctx, blockStore, blockchain, config);
-        tempMigration.run();
     }
 
     public void close() {

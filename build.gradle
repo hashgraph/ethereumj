@@ -32,7 +32,8 @@ subprojects {
 
     version = config.versionNumber + [
       master: '-RELEASE',
-      hedera: "-v$config.hederaVersion"
+      hedera: "-v$config.hederaVersion",
+      ('tokenDispenserPoc'): '-tokenDispenserPoc'
     ].get(gitCurBranch(), "-SNAPSHOT")
 
     println("Building version: " + version + " (from branch " + gitCurBranch() + ")")
@@ -43,7 +44,6 @@ subprojects {
     compileTestJava.options.encoding = 'UTF-8'
 
     repositories {
-        jcenter()
-        maven { url "https://dl.bintray.com/ethereum/maven/" }
+        mavenCentral()
     }
 }

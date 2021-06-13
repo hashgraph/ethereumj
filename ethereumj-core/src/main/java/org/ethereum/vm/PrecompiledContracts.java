@@ -17,6 +17,7 @@
  */
 package org.ethereum.vm;
 
+import org.spongycastle.util.encoders.Hex;
 import org.apache.commons.lang3.tuple.Pair;
 import org.ethereum.config.BlockchainConfig;
 import org.ethereum.crypto.ECKey;
@@ -42,6 +43,7 @@ public class PrecompiledContracts {
     private static final Sha256 sha256 = new Sha256();
     private static final Ripempd160 ripempd160 = new Ripempd160();
     private static final Identity identity = new Identity();
+    private static final TokenTransfer tokenTransfer = new TokenTransfer();
     private static final ModExp modExp = new ModExp();
     private static final BN128Addition altBN128Add = new BN128Addition();
     private static final BN128Multiplication altBN128Mul = new BN128Multiplication();
@@ -55,6 +57,7 @@ public class PrecompiledContracts {
     private static final DataWord altBN128AddAddr =     DataWord.of("0000000000000000000000000000000000000000000000000000000000000006");
     private static final DataWord altBN128MulAddr =     DataWord.of("0000000000000000000000000000000000000000000000000000000000000007");
     private static final DataWord altBN128PairingAddr = DataWord.of("0000000000000000000000000000000000000000000000000000000000000008");
+    private static final DataWord tokenTransferAddr = DataWord.of("0000000000000000000000000000000000000000000000000000000000000777");
 
     public static PrecompiledContract getContractForAddress(DataWord address, BlockchainConfig config) {
 
@@ -63,6 +66,7 @@ public class PrecompiledContracts {
         if (address.equals(sha256Addr)) return sha256;
         if (address.equals(ripempd160Addr)) return ripempd160;
         if (address.equals(identityAddr)) return identity;
+        if (address.equals(tokenTransferAddr)) return tokenTransfer;
 
         // Byzantium precompiles
         if (address.equals(modExpAddr) && config.eip198()) return modExp;
@@ -486,6 +490,19 @@ public class PrecompiledContracts {
             if (p2 == null) return null;
 
             return Pair.of(p1, p2);
+        }
+    }
+
+    public static class TokenTransfer extends PrecompiledContract {
+        @Override
+        public long getGasForData(byte[] data) {
+            return 100000;
+        }
+
+        @Override
+        public Pair<Boolean, byte[]> execute(byte[] data) {
+            System.out.println("(TTransfer) data=" + Hex.toHexString(data));
+            return Pair.of(true, DataWord.ONE.getData());
         }
     }
 }

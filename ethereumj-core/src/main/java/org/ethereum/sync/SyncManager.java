@@ -90,9 +90,6 @@ public class SyncManager extends BlockDownloader {
     private CompositeEthereumListener compositeEthereumListener;
 
     @Autowired
-    private FastSyncManager fastSyncManager;
-
-    @Autowired
     private DependentBlockHeaderRule parentHeaderValidator;
 
     ChannelManager channelManager;
@@ -154,7 +151,6 @@ public class SyncManager extends BlockDownloader {
             pool.init(channelManager, blockchain);
 
             if (config.isFastSyncEnabled()) {
-                fastSyncManager.init();
             } else {
                 initRegularSync(EthereumListener.SyncState.COMPLETE);
             }
@@ -200,16 +196,7 @@ public class SyncManager extends BlockDownloader {
     }
 
     public SyncStatus getSyncStatus() {
-        if (config.isFastSyncEnabled()) {
-            SyncStatus syncStatus = fastSyncManager.getSyncState();
-            if (syncStatus.getStage() == SyncStatus.SyncStage.Complete) {
-                return getSyncStateImpl();
-            } else {
-                return new SyncStatus(syncStatus, blockchain.getBestBlock().getNumber(), getLastKnownBlockNumber());
-            }
-        } else {
-            return getSyncStateImpl();
-        }
+      return getSyncStateImpl();
     }
 
     private SyncStatus getSyncStateImpl() {
@@ -430,7 +417,7 @@ public class SyncManager extends BlockDownloader {
     }
 
     public boolean isFastSyncRunning() {
-        return fastSyncManager.isFastSyncInProgress();
+      return false;
     }
 
     public long getLastKnownBlockNumber() {
@@ -455,7 +442,6 @@ public class SyncManager extends BlockDownloader {
                 syncQueueThread.interrupt();
                 syncQueueThread.join(10 * 1000);
             }
-            if (config.isFastSyncEnabled()) fastSyncManager.close();
         } catch (Exception e) {
             logger.warn("Problems closing SyncManager", e);
         }
